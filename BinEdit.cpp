@@ -1160,7 +1160,7 @@ void BinEdit::DrawHeader(HDC hdc)
     INT y = MulDiv(3, static_cast<int>(m_dpi), 96);
 
     SetTextColor(hdc, colLabel);
-    TextOutW(hdc, m_addrColX - sx, y, L"+ADDRESS", 8);
+    TextOutW(hdc, m_addrColX - sx, y, L"@ADDRESS", 8);
 
     for (int i = 0; i < BYTES_PER_LINE; ++i)
     {

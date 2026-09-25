@@ -127,6 +127,7 @@ protected:
     void OnCopy(HWND hwnd);
     void OnPaste(HWND hwnd);
     void OnClear(HWND hwnd);
+    void OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify);
 
     // ドラッグ選択・自動スクロール
     bool AutoScrollDragIfNeeded(int y);

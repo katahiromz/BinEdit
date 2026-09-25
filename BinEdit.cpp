@@ -460,6 +460,48 @@ void BinEdit::OnClear(HWND hwnd)
     NotifyChanged();
 }
 
+void BinEdit::OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
+{
+    switch (id)
+    {
+    case ID_BINEDIT_CUT:
+        SendMessageW(m_hwnd, WM_CUT, 0, 0);
+        break;
+    case ID_BINEDIT_COPY:
+        SendMessageW(m_hwnd, WM_COPY, 0, 0);
+        break;
+    case ID_BINEDIT_PASTE:
+        SendMessageW(m_hwnd, WM_PASTE, 0, 0);
+        break;
+    case ID_BINEDIT_DELETE:
+        SendMessageW(m_hwnd, WM_CLEAR, 0, 0);
+        break;
+    case ID_BINEDIT_SELECTALL:
+        SelectAll();
+        break;
+    case ID_BINEDIT_GOTO:
+        GoToOffsetDialog();
+        break;
+    case ID_BINEDIT_ANSI:
+        SetTextMode(BinEditTextMode::ANSI);
+        break;
+    case ID_BINEDIT_UTF8:
+        SetTextMode(BinEditTextMode::UTF8);
+        break;
+    case ID_BINEDIT_UTF16:
+        SetTextMode(BinEditTextMode::UTF16);
+        break;
+    case ID_BINEDIT_SJIS:
+        SetTextMode(BinEditTextMode::SJIS);
+        break;
+    case ID_BINEDIT_COPYDUMPTEXT:
+        CopyDumpText();
+        break;
+    default:
+        break;
+    }
+}
+
 LRESULT BinEdit::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
@@ -488,6 +530,7 @@ LRESULT BinEdit::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
     HANDLE_MSG(m_hwnd, WM_COPY,        OnCopy);
     HANDLE_MSG(m_hwnd, WM_PASTE,       OnPaste);
     HANDLE_MSG(m_hwnd, WM_CLEAR,       OnClear);
+    HANDLE_MSG(m_hwnd, WM_COMMAND,     OnCommand);
 
     case WM_CAPTURECHANGED:
         m_trackingMouse = false;
@@ -798,42 +841,8 @@ void BinEdit::ShowContextMenu(int screenX, int screenY)
     int cmd = TrackPopupMenu(hSubMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON, screenX, screenY, 0, m_hwnd, nullptr);
     DestroyMenu(hMenu);
 
-    switch (cmd)
-    {
-    case ID_BINEDIT_CUT:
-        SendMessageW(m_hwnd, WM_CUT, 0, 0);
-        break;
-    case ID_BINEDIT_COPY:
-        SendMessageW(m_hwnd, WM_COPY, 0, 0);
-        break;
-    case ID_BINEDIT_PASTE:
-        SendMessageW(m_hwnd, WM_PASTE, 0, 0);
-        break;
-    case ID_BINEDIT_DELETE:
-        SendMessageW(m_hwnd, WM_CLEAR, 0, 0);
-        break;
-    case ID_BINEDIT_SELECTALL:
-        SelectAll();
-        break;
-    case ID_BINEDIT_GOTO:
-        GoToOffsetDialog();
-        break;
-    case ID_BINEDIT_ANSI:
-        SetTextMode(BinEditTextMode::ANSI);
-        break;
-    case ID_BINEDIT_UTF8:
-        SetTextMode(BinEditTextMode::UTF8);
-        break;
-    case ID_BINEDIT_UTF16:
-        SetTextMode(BinEditTextMode::UTF16);
-        break;
-    case ID_BINEDIT_SJIS:
-        SetTextMode(BinEditTextMode::SJIS);
-        break;
-    case ID_BINEDIT_COPYDUMPTEXT:
-        CopyDumpText();
-        break;
-    }
+    if (cmd)
+        PostMessage(m_hwnd, WM_COMMAND, cmd, 0);
 }
 
 void BinEdit::NotifyChanged()

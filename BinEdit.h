@@ -57,9 +57,12 @@ public:
     static BinEdit* FromHwnd(HWND hwnd);
 
     // ---- データ操作 --------------------------------------------------
-    void SetData(data_type data);
     const data_type& GetData() const { return m_data; }
+    void SetData(data_type data);
+
+    data_type* GetDataSrc() { return m_data_src; }
     void SetDataSrc(data_type* data_src = nullptr);
+
     std::wstring GetDumpText() const;
 
     // ---- デコードモード設定 ------------------------------------------

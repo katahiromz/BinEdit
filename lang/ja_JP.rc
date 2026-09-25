@@ -1,0 +1,67 @@
+// このファイルは リソーエディタ 6.2.1 によって自動生成されました。
+// † <-- このダガー記号は、UTF-8の検出に役立ちます。
+
+#pragma code_page(65001) // UTF-8
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+//////////////////////////////////////////////////////////////////////////////
+// RT_MENU
+
+1 MENU
+{
+    POPUP "ファイル(&F)"
+    {
+        MENUITEM "開く(&O)...", ID_FILE_OPEN
+        MENUITEM SEPARATOR
+        MENUITEM "終了(&X)\tAlt+F4", ID_EXIT
+    }
+    POPUP "表示(&V)"
+    {
+        MENUITEM "ANSI", ID_ANSI
+        MENUITEM "UTF-8", ID_UTF8
+        MENUITEM "UTF-16", ID_UTF16
+        MENUITEM SEPARATOR
+        MENUITEM "ヘッダーを表示(&H)", ID_TOGGLE_HEADER, CHECKED
+    }
+}
+
+IDR_BINEDIT_CTX_MENU MENU
+{
+    POPUP "Popup #0"
+    {
+        MENUITEM "切り取り(&T)\tCtrl+X", ID_BINEDIT_CUT
+        MENUITEM "コピー(&C)\tCtrl+C", ID_BINEDIT_COPY
+        MENUITEM "貼り付け(&P)\tCtrl+V", ID_BINEDIT_PASTE
+        MENUITEM "削除(&D)\tDel", ID_BINEDIT_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "すべて選択(&A)\tCtrl+A", ID_BINEDIT_SELECTALL
+        MENUITEM "オフセットへ移動(&G)...\tCtrl+G", ID_BINEDIT_GOTO
+        MENUITEM SEPARATOR
+        MENUITEM "ANSI", ID_BINEDIT_ANSI
+        MENUITEM "UTF-8", ID_BINEDIT_UTF8
+        MENUITEM "UTF-16", ID_BINEDIT_UTF16
+        MENUITEM "シフトJIS", ID_BINEDIT_SJIS
+        MENUITEM SEPARATOR
+        MENUITEM "ダンプ文字列をコピー(&U)", ID_BINEDIT_COPYDUMPTEXT
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// RT_DIALOG
+
+IDD_GOTO_OFFSET DIALOGEX 0, 0, 200, 92
+CAPTION "オフセットへ移動"
+STYLE DS_CENTER | DS_MODALFRAME | WS_POPUPWINDOW | WS_CAPTION
+FONT 9, "MS Shell Dlg", 0, 0, 128 // SHIFTJIS_CHARSET
+{
+    LTEXT "オフセット:", stc1, 7, 9, 52, 8
+    EDITTEXT edt1, 62, 7, 131, 12, ES_AUTOHSCROLL, WS_EX_CLIENTEDGE
+    LTEXT "", stc2, 7, 24, 186, 10
+    AUTORADIOBUTTON "16進数(&H)", rad1, 7, 40, 85, 10, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "10進数(&D)", rad2, 95, 40, 85, 10, WS_TABSTOP
+    DEFPUSHBUTTON "OK", IDOK, 88, 68, 50, 14
+    PUSHBUTTON "キャンセル", IDCANCEL, 143, 68, 50, 14
+}
+
+//////////////////////////////////////////////////////////////////////////////

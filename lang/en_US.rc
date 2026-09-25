@@ -1,0 +1,67 @@
+// このファイルは リソーエディタ 6.2.1 によって自動生成されました。
+// † <-- このダガー記号は、UTF-8の検出に役立ちます。
+
+#pragma code_page(65001) // UTF-8
+
+LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
+
+//////////////////////////////////////////////////////////////////////////////
+// RT_MENU
+
+1 MENU
+{
+    POPUP "&File"
+    {
+        MENUITEM "&Open...", ID_FILE_OPEN
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit\tAlt+F4", ID_EXIT
+    }
+    POPUP "&View"
+    {
+        MENUITEM "ANSI", ID_ANSI
+        MENUITEM "UTF-8", ID_UTF8
+        MENUITEM "UTF-16", ID_UTF16
+        MENUITEM SEPARATOR
+        MENUITEM "Display &header", ID_TOGGLE_HEADER, CHECKED
+    }
+}
+
+IDR_BINEDIT_CTX_MENU MENU
+{
+    POPUP "Popup #0"
+    {
+        MENUITEM "Cu&t\tCtrl+X", ID_BINEDIT_CUT
+        MENUITEM "&Copy\tCtrl+C", ID_BINEDIT_COPY
+        MENUITEM "&Paste\tCtrl+V", ID_BINEDIT_PASTE
+        MENUITEM "&Delete\tDel", ID_BINEDIT_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "Select &All\tCtrl+A", ID_BINEDIT_SELECTALL
+        MENUITEM "&Go to offset...\tCtrl+G", ID_BINEDIT_GOTO
+        MENUITEM SEPARATOR
+        MENUITEM "ANSI", ID_BINEDIT_ANSI
+        MENUITEM "UTF-8", ID_BINEDIT_UTF8
+        MENUITEM "UTF-16", ID_BINEDIT_UTF16
+        MENUITEM "Shift_JIS", ID_BINEDIT_SJIS
+        MENUITEM SEPARATOR
+        MENUITEM "Copy d&ump string", ID_BINEDIT_COPYDUMPTEXT
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// RT_DIALOG
+
+IDD_GOTO_OFFSET DIALOGEX 0, 0, 200, 92
+CAPTION "Go to offset"
+STYLE DS_CENTER | DS_MODALFRAME | WS_POPUPWINDOW | WS_CAPTION
+FONT 9, "MS Shell Dlg", 0, 0, 0 // ANSI_CHARSET
+{
+    LTEXT "&Offset:", stc1, 7, 9, 52, 8
+    EDITTEXT edt1, 62, 7, 131, 12, ES_AUTOHSCROLL, WS_EX_CLIENTEDGE
+    LTEXT "", stc2, 7, 24, 186, 10
+    AUTORADIOBUTTON "&Hex", rad1, 7, 40, 85, 10, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "&Dec", rad2, 95, 40, 85, 10, WS_TABSTOP
+    DEFPUSHBUTTON "OK", IDOK, 88, 68, 50, 14
+    PUSHBUTTON "Cancel", IDCANCEL, 143, 68, 50, 14
+}
+
+//////////////////////////////////////////////////////////////////////////////

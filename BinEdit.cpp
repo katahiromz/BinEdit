@@ -27,7 +27,7 @@ int HexValue(WCHAR ch)
     return -1;
 }
 
-DWORD SelectionCaretFromHit(DWORD hitOff, DWORD anchor, DWORD dataSize)
+size_t SelectionCaretFromHit(size_t hitOff, size_t anchor, size_t dataSize)
 {
     if (hitOff >= dataSize)
         return dataSize;
@@ -80,9 +80,9 @@ UINT GetWindowDpi(HWND hwnd)
 
 struct GotoOffsetDlgParams
 {
-    DWORD current;
-    DWORD maxOffset;
-    DWORD result;
+    size_t current;
+    size_t maxOffset;
+    size_t result;
     bool  accepted;
 };
 
@@ -98,11 +98,13 @@ INT_PTR CALLBACK GotoOffsetDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
         CheckRadioButton(hDlg, rad1, rad2, rad1);
 
         WCHAR buf[32];
-        StringCchPrintfW(buf, _countof(buf), L"%X", p->current);
+        StringCchPrintfW(buf, _countof(buf), L"%llX", static_cast<unsigned long long>(p->current));
         SetDlgItemTextW(hDlg, edt1, buf);
 
         WCHAR info[128];
-        StringCchPrintfW(info, _countof(info), L"範囲: 0 - %X (%u バイト)", p->maxOffset, p->maxOffset);
+        StringCchPrintfW(info, _countof(info), L"範囲: 0 - %llX (%llu バイト)",
+                         static_cast<unsigned long long>(p->maxOffset),
+                         static_cast<unsigned long long>(p->maxOffset));
         SetDlgItemTextW(hDlg, stc2, info);
 
         SendDlgItemMessageW(hDlg, edt1, EM_SETSEL, 0, -1);
@@ -133,7 +135,7 @@ INT_PTR CALLBACK GotoOffsetDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
 
             const bool hex = (IsDlgButtonChecked(hDlg, rad1) == BST_CHECKED);
             WCHAR* endp = nullptr;
-            unsigned long val = wcstoul(buf, &endp, hex ? 16 : 10);
+            unsigned __int64 val = _wcstoui64(buf, &endp, hex ? 16 : 10);
             if (endp == buf)
             {
                 MessageBeep(MB_ICONWARNING);
@@ -141,9 +143,9 @@ INT_PTR CALLBACK GotoOffsetDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
                 SetFocus(GetDlgItem(hDlg, edt1));
                 return TRUE;
             }
-            if (val > p->maxOffset)
-                val = p->maxOffset;
-            p->result = static_cast<DWORD>(val);
+            if (val > static_cast<unsigned __int64>(p->maxOffset))
+                val = static_cast<unsigned __int64>(p->maxOffset);
+            p->result = static_cast<size_t>(val);
             p->accepted = true;
             EndDialog(hDlg, IDOK);
             return TRUE;
@@ -166,7 +168,7 @@ INT_PTR CALLBACK GotoOffsetDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
     return FALSE;
 }
 
-DWORD DecodeAnsiOne(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph, bool& printable, UINT nCodePage = CP_ACP)
+size_t DecodeAnsiOne(const BYTE* data, size_t size, size_t pos, std::wstring& glyph, bool& printable, UINT nCodePage = CP_ACP)
 {
     BYTE b0 = data[pos];
     if (b0 == 0)
@@ -176,7 +178,7 @@ DWORD DecodeAnsiOne(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph
         return 1;
     }
 
-    DWORD len = 1;
+    size_t len = 1;
     if (IsDBCSLeadByteEx(nCodePage, b0) && pos + 1 < size)
         len = 2;
 
@@ -213,7 +215,7 @@ DWORD DecodeAnsiOne(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph
     return len;
 }
 
-DWORD DecodeUtf8One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph, bool& printable)
+size_t DecodeUtf8One(const BYTE* data, size_t size, size_t pos, std::wstring& glyph, bool& printable)
 {
     BYTE b0 = data[pos];
     if (b0 == 0)
@@ -223,8 +225,8 @@ DWORD DecodeUtf8One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph
         return 1;
     }
 
-    DWORD need = 0;
-    DWORD cp = 0;
+    size_t need = 0;
+    size_t cp = 0;
     if ((b0 & 0x80) == 0x00)      { need = 1; cp = b0; }
     else if ((b0 & 0xE0) == 0xC0) { need = 2; cp = b0 & 0x1F; }
     else if ((b0 & 0xF0) == 0xE0) { need = 3; cp = b0 & 0x0F; }
@@ -243,7 +245,7 @@ DWORD DecodeUtf8One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph
         return 1;
     }
 
-    for (DWORD i = 1; i < need; ++i)
+    for (size_t i = 1; i < need; ++i)
     {
         BYTE b = data[pos + i];
         if ((b & 0xC0) != 0x80)
@@ -255,7 +257,7 @@ DWORD DecodeUtf8One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph
         cp = (cp << 6) | (b & 0x3F);
     }
 
-    constexpr DWORD kMinForLen[5] = { 0, 0, 0x80, 0x800, 0x10000 };
+    constexpr size_t kMinForLen[5] = { 0, 0, 0x80, 0x800, 0x10000 };
     if ((need > 1 && cp < kMinForLen[need]) || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF)
     {
         glyph = L".";
@@ -276,7 +278,7 @@ DWORD DecodeUtf8One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph
     }
     else
     {
-        DWORD v = cp - 0x10000;
+        size_t v = cp - 0x10000;
         WCHAR hi = static_cast<WCHAR>(0xD800 + (v >> 10));
         WCHAR lo = static_cast<WCHAR>(0xDC00 + (v & 0x3FF));
         glyph.assign(1, hi);
@@ -286,7 +288,7 @@ DWORD DecodeUtf8One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph
     return need;
 }
 
-DWORD DecodeUtf16One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyph, bool& printable)
+size_t DecodeUtf16One(const BYTE* data, size_t size, size_t pos, std::wstring& glyph, bool& printable)
 {
     if (pos + 2 > size)
     {
@@ -335,7 +337,7 @@ DWORD DecodeUtf16One(const BYTE* data, DWORD size, DWORD pos, std::wstring& glyp
 
 // テキストモードに応じて1文字分をデコードする共通ディスパッチ
 // (RebuildDecodeCache とインクリメンタル更新の両方から使う)
-DWORD DecodeOneChar(BinEditTextMode mode, const BYTE* data, DWORD size, DWORD pos,
+size_t DecodeOneChar(BinEditTextMode mode, const BYTE* data, size_t size, size_t pos,
                     std::wstring& glyph, bool& printable)
 {
     switch (mode)
@@ -663,6 +665,12 @@ HFONT BinEdit::OnGetFont(HWND /*hwnd*/)
     return m_hFont;
 }
 
+int BinEdit::AddressDigits() const
+{
+    // 通常は32ビット幅 (8桁) で表示し、4GBを超えるバッファのみ64ビット幅 (16桁) にする
+    return (size() > 0xFFFFFFFFull) ? 16 : 8;
+}
+
 void BinEdit::RecalcLayout()
 {
     RECT rc;
@@ -676,7 +684,7 @@ void BinEdit::RecalcLayout()
     m_headerGap = MulDiv(4, static_cast<int>(m_dpi), 96);
 
     m_addrColX = margin4;
-    m_hexColX  = m_addrColX + 10 * cw;
+    m_hexColX  = m_addrColX + (AddressDigits() + 2) * cw;
     m_textColX = m_hexColX + (BYTES_PER_LINE * 3 + 1) * cw + cw;
 
     m_contentWidth = m_textColX + BYTES_PER_LINE * cw + margin4;
@@ -738,7 +746,7 @@ BOOL BinEdit::OnSetCursor(HWND hwnd, HWND hwndCursor, UINT codeHitTest, UINT msg
         GetCursorPos(&pt);
         ScreenToClient(m_hwnd, &pt);
 
-        DWORD off; PANE pane; bool hi;
+        size_t off; PANE pane; bool hi;
         if (HitTest(pt.x, pt.y, off, pane, hi))
         {
             if (pane == PANE_ADDRESS)
@@ -882,6 +890,50 @@ void BinEdit::SetData(data_type data)
     RebuildDecodeCache();
     UpdateScrollInfo();
     InvalidateAll();
+
+    // SetLimit() で設定された範囲外なら合わせる
+    if (size() < m_minLen)
+        resize(m_minLen);
+    else if (size() > m_maxLen)
+        resize(m_maxLen);
+}
+
+void BinEdit::resize(size_t cb)
+{
+    if (cb < m_minLen) cb = m_minLen;
+    if (cb > m_maxLen) cb = m_maxLen;
+
+    if (cb == size()) return;
+
+    // 拡張時はゼロ埋め、縮小時は末尾を切り詰める (std::vector::resize がどちらも行う)
+    m_data_src->resize(cb, 0);
+
+    m_caretOffset  = __min(m_caretOffset, size());
+    m_anchorOffset = __min(m_anchorOffset, size());
+    m_caretHiNibble = true;
+
+    RebuildDecodeCache();
+    RecalcLayout();
+    UpdateScrollInfo();
+    EnsureCaretVisible();
+    UpdateCaretShape();
+    InvalidateAll();
+    NotifyChanged();
+}
+
+void BinEdit::SetLimit(size_t min_len, size_t max_len)
+{
+    if (min_len > max_len)
+        std::swap(min_len, max_len); // 安全側に倒す (逆転していたら入れ替える)
+
+    m_minLen = min_len;
+    m_maxLen = max_len;
+
+    const size_t cur = size();
+    if (cur < m_minLen)
+        resize(m_minLen);
+    else if (cur > m_maxLen)
+        resize(m_maxLen);
 }
 
 void BinEdit::SetTextMode(BinEditTextMode mode)
@@ -935,7 +987,7 @@ bool BinEdit::IsEditable() const
     return !m_readOnly && IsWindowEnabled(m_hwnd);
 }
 
-void BinEdit::SetCaretOffset(DWORD offset)
+void BinEdit::SetCaretOffset(size_t offset)
 {
     m_caretOffset = __min(offset, size());
     m_anchorOffset = m_caretOffset;
@@ -970,22 +1022,23 @@ bool BinEdit::GoToOffsetDialog()
 std::wstring BinEdit::GetDumpText() const
 {
     std::wstring result;
-    const DWORD dataSize = size();
+    const size_t dataSize = size();
     if (dataSize == 0) return result;
 
     const BYTE* pData = m_data_src->data();
     const size_t totalLines = (dataSize + BYTES_PER_LINE - 1) / BYTES_PER_LINE;
     result.reserve(totalLines * 80);
 
-    for (DWORD addr = 0; addr < dataSize; addr += BYTES_PER_LINE)
+    const int addrDigits = AddressDigits();
+    for (size_t addr = 0; addr < dataSize; addr += BYTES_PER_LINE)
     {
-        WCHAR addrBuf[16];
-        StringCchPrintfW(addrBuf, _countof(addrBuf), L"%08X  ", addr);
+        WCHAR addrBuf[24];
+        StringCchPrintfW(addrBuf, _countof(addrBuf), L"%0*llX  ", addrDigits, static_cast<unsigned long long>(addr));
         result += addrBuf;
 
-        DWORD lineCount = __min(BYTES_PER_LINE, dataSize - addr);
+        size_t lineCount = __min(BYTES_PER_LINE, dataSize - addr);
 
-        for (DWORD i = 0; i < BYTES_PER_LINE; ++i)
+        for (size_t i = 0; i < BYTES_PER_LINE; ++i)
         {
             if (i < lineCount)
             {
@@ -1002,13 +1055,13 @@ std::wstring BinEdit::GetDumpText() const
         }
         result.push_back(L' ');
 
-        for (DWORD i = 0; i < lineCount; ++i)
+        for (size_t i = 0; i < lineCount; ++i)
         {
-            DWORD pos = addr + i;
+            size_t pos = addr + i;
             if (pos < m_byteToDecodedIndex.size())
             {
-                int idx = m_byteToDecodedIndex[pos];
-                if (idx >= 0 && idx < static_cast<int>(m_decoded.size()))
+                ptrdiff_t idx = m_byteToDecodedIndex[pos];
+                if (idx >= 0 && idx < static_cast<ptrdiff_t>(m_decoded.size()))
                 {
                     const DecodedChar& dc = m_decoded[idx];
                     result += dc.printable ? dc.glyph : L".";
@@ -1033,9 +1086,9 @@ void BinEdit::RebuildDecodeCache()
     m_byteToDecodedIndex.assign(size(), -1);
 
     const BYTE* p = m_data_src->data();
-    const DWORD size = this->size();
+    const size_t size = this->size();
 
-    DWORD pos = 0;
+    size_t pos = 0;
     while (pos < size)
     {
         DecodedChar dc;
@@ -1043,25 +1096,25 @@ void BinEdit::RebuildDecodeCache()
         dc.length = DecodeOneChar(m_textMode, p, size, pos, dc.glyph, dc.printable);
         if (dc.length == 0) dc.length = 1;
 
-        m_byteToDecodedIndex[pos] = static_cast<int>(m_decoded.size());
+        m_byteToDecodedIndex[pos] = static_cast<ptrdiff_t>(m_decoded.size());
         m_decoded.push_back(dc);
         pos += dc.length;
     }
 }
 
-void BinEdit::UpdateDecodeCacheAfterEdit(DWORD editPos, DWORD oldLen, DWORD newLen)
+void BinEdit::UpdateDecodeCacheAfterEdit(size_t editPos, size_t oldLen, size_t newLen)
 {
-    const DWORD newSize = size();
-    const long  delta   = static_cast<long>(newLen) - static_cast<long>(oldLen);
+    const size_t newSize = size();
+    const ptrdiff_t delta = static_cast<ptrdiff_t>(newLen) - static_cast<ptrdiff_t>(oldLen);
 
     // 直前まで m_byteToDecodedIndex は「編集前」のバッファを指しているはずなので、
     // そのサイズから逆算した旧サイズが整合しない場合は前提が崩れているのでフルリビルド。
-    if (static_cast<long>(m_byteToDecodedIndex.size()) != static_cast<long>(newSize) - delta)
+    if (static_cast<ptrdiff_t>(m_byteToDecodedIndex.size()) != static_cast<ptrdiff_t>(newSize) - delta)
     {
         RebuildDecodeCache();
         return;
     }
-    const DWORD oldSize = m_byteToDecodedIndex.size();
+    const size_t oldSize = m_byteToDecodedIndex.size();
     if (oldSize == 0 || m_decoded.empty())
     {
         RebuildDecodeCache();
@@ -1069,28 +1122,28 @@ void BinEdit::UpdateDecodeCacheAfterEdit(DWORD editPos, DWORD oldLen, DWORD newL
     }
 
     // --- 編集点を含む「旧」文字の先頭まで巻き戻る (それ以前は編集の影響を受けない) ---
-    DWORD p = __min(editPos, oldSize - 1);
+    size_t p = __min(editPos, oldSize - 1);
     while (p > 0 && m_byteToDecodedIndex[p] < 0)
         --p;
-    const DWORD oldStart = p;
-    const int firstIdx = (m_byteToDecodedIndex[p] >= 0) ? m_byteToDecodedIndex[p] : 0;
+    const size_t oldStart = p;
+    const ptrdiff_t firstIdx = (m_byteToDecodedIndex[p] >= 0) ? m_byteToDecodedIndex[p] : 0;
 
     // --- 「新」バッファ上を oldStart から再デコードし、旧キャッシュと再同期できる点を探す ---
     const BYTE* pData = m_data_src->data();
-    const DWORD resumeAfter = editPos + newLen;               // 編集(挿入)領域の直後の新位置
-    const DWORD giveUpAt = __min(newSize, resumeAfter + 65536); // 病的ケース (再同期不能) の暴走防止
+    const size_t resumeAfter = editPos + newLen;               // 編集(挿入)領域の直後の新位置
+    const size_t giveUpAt = __min(newSize, resumeAfter + 65536); // 病的ケース (再同期不能) の暴走防止
 
     std::vector<DecodedChar> freshChars;
-    DWORD q = oldStart;
+    size_t q = oldStart;
     bool resynced = false;
-    int  resyncOldIdx = static_cast<int>(m_decoded.size());
+    ptrdiff_t resyncOldIdx = static_cast<ptrdiff_t>(m_decoded.size());
 
     while (q < newSize)
     {
         if (q >= resumeAfter)
         {
-            const long qOldL = static_cast<long>(q) - delta;
-            if (qOldL >= 0 && static_cast<DWORD>(qOldL) < oldSize && m_byteToDecodedIndex[qOldL] >= 0)
+            const ptrdiff_t qOldL = static_cast<ptrdiff_t>(q) - delta;
+            if (qOldL >= 0 && static_cast<size_t>(qOldL) < oldSize && m_byteToDecodedIndex[qOldL] >= 0)
             {
                 resynced = true;
                 resyncOldIdx = m_byteToDecodedIndex[qOldL];
@@ -1112,7 +1165,7 @@ void BinEdit::UpdateDecodeCacheAfterEdit(DWORD editPos, DWORD oldLen, DWORD newL
     {
         // バッファの本当の終端まで再デコードし切った場合は、それ自体が有効な終端 (それ以降は何もない)
         resynced = true;
-        resyncOldIdx = static_cast<int>(m_decoded.size());
+        resyncOldIdx = static_cast<ptrdiff_t>(m_decoded.size());
     }
 
     if (!resynced)
@@ -1130,20 +1183,20 @@ void BinEdit::UpdateDecodeCacheAfterEdit(DWORD editPos, DWORD oldLen, DWORD newL
     for (size_t i = static_cast<size_t>(resyncOldIdx); i < m_decoded.size(); ++i)
     {
         DecodedChar dc = m_decoded[i];
-        dc.offset = static_cast<DWORD>(static_cast<long>(dc.offset) + delta);
+        dc.offset = static_cast<size_t>(static_cast<ptrdiff_t>(dc.offset) + delta);
         result.push_back(std::move(dc));
     }
 
     m_decoded.swap(result);
     m_byteToDecodedIndex.assign(newSize, -1);
     for (size_t i = 0; i < m_decoded.size(); ++i)
-        m_byteToDecodedIndex[m_decoded[i].offset] = static_cast<int>(i);
+        m_byteToDecodedIndex[m_decoded[i].offset] = static_cast<ptrdiff_t>(i);
 }
 
-DWORD BinEdit::DecodedLengthAt(DWORD pos) const
+size_t BinEdit::DecodedLengthAt(size_t pos) const
 {
     if (pos >= m_byteToDecodedIndex.size()) return 1;
-    int idx = m_byteToDecodedIndex[pos];
+    ptrdiff_t idx = m_byteToDecodedIndex[pos];
     if (idx < 0) return 1;
     return m_decoded[idx].length;
 }
@@ -1229,11 +1282,11 @@ void BinEdit::OnPaint(HWND hwnd)
     const COLORREF colRange = (m_hasFocus && enabled) ? RGB(0x33, 0x66, 0xCC) : RGB(0xC0, 0xC0, 0xC0);
     const COLORREF colRangeText = (m_hasFocus && enabled) ? RGB(255, 255, 255) : colHex;
 
-    const DWORD size = this->size();
+    const size_t size = this->size();
     const int cw = m_charWidth;
     const int sx = m_scrollX;
 
-    DWORD selStart = 0, selEnd = 0;
+    size_t selStart = 0, selEnd = 0;
     GetSelection(selStart, selEnd);
     const bool hasSel = (selStart < selEnd);
 
@@ -1245,35 +1298,37 @@ void BinEdit::OnPaint(HWND hwnd)
 
     DrawHeader(memDC);
 
+    const int addrDigits = AddressDigits();
+
     for (int row = 0; row < m_visibleLines + 1; ++row)
     {
-        DWORD addr = static_cast<DWORD>(m_topLine + row) * BYTES_PER_LINE;
+        size_t addr = static_cast<size_t>(m_topLine + row) * BYTES_PER_LINE;
         if (addr > size) break;
 
         int y = m_headerHeight + row * m_lineHeight;
 
-        WCHAR addrText[16];
-        StringCchPrintfW(addrText, _countof(addrText), L"%08X", addr);
+        WCHAR addrText[24];
+        StringCchPrintfW(addrText, _countof(addrText), L"%0*llX", addrDigits, static_cast<unsigned long long>(addr));
 
         SetTextColor(memDC, colAddr);
-        TextOutW(memDC, m_addrColX - sx, y, addrText, 8);
+        TextOutW(memDC, m_addrColX - sx, y, addrText, addrDigits);
 
-        DWORD remain = (addr < size) ? (size - addr) : 0;
-        DWORD count = (remain < BYTES_PER_LINE) ? remain : BYTES_PER_LINE;
+        size_t remain = (addr < size) ? (size - addr) : 0;
+        size_t count = (remain < BYTES_PER_LINE) ? remain : BYTES_PER_LINE;
 
-        auto hexCellX = [&](DWORD i) -> int {
+        auto hexCellX = [&](size_t i) -> int {
             int gap = (i >= BYTES_PER_LINE / 2) ? 1 : 0;
             return m_hexColX + static_cast<int>(i * 3 + gap) * cw - sx;
         };
 
         if (hasSel && count > 0)
         {
-            const DWORD lineSelStart = __max(selStart, addr);
-            const DWORD lineSelEnd   = __min(selEnd, addr + count);
+            const size_t lineSelStart = __max(selStart, addr);
+            const size_t lineSelEnd   = __min(selEnd, addr + count);
             if (lineSelStart < lineSelEnd)
             {
-                const DWORD i0 = lineSelStart - addr;
-                const DWORD i1 = lineSelEnd - addr - 1;
+                const size_t i0 = lineSelStart - addr;
+                const size_t i1 = lineSelEnd - addr - 1;
                 const int left  = hexCellX(i0);
                 const int right = hexCellX(i1) + 2 * cw;
                 RECT band = { left, y, right, y + m_lineHeight };
@@ -1281,9 +1336,9 @@ void BinEdit::OnPaint(HWND hwnd)
             }
         }
 
-        for (DWORD i = 0; i < count; ++i)
+        for (size_t i = 0; i < count; ++i)
         {
-            DWORD off = addr + i;
+            size_t off = addr + i;
             int x = hexCellX(i);
 
             const bool inRange = hasSel && off >= selStart && off < selEnd;
@@ -1307,17 +1362,17 @@ void BinEdit::OnPaint(HWND hwnd)
         {
             const int textColLeft  = m_textColX - sx;
             const int textColRight = m_textColX + BYTES_PER_LINE * cw - sx;
-            const DWORD lineEnd = addr + count;
+            const size_t lineEnd = addr + count;
 
-            int di = 0;
+            ptrdiff_t di = 0;
             if (addr < m_byteToDecodedIndex.size())
             {
-                DWORD p = addr;
+                size_t p = addr;
                 while (p > 0 && m_byteToDecodedIndex[p] < 0) --p;
                 if (m_byteToDecodedIndex[p] >= 0) di = m_byteToDecodedIndex[p];
             }
 
-            for (int ci = di; ci < static_cast<int>(m_decoded.size()); ++ci)
+            for (ptrdiff_t ci = di; ci < static_cast<ptrdiff_t>(m_decoded.size()); ++ci)
             {
                 const DecodedChar& dc = m_decoded[ci];
                 if (dc.offset >= lineEnd) break;
@@ -1331,8 +1386,8 @@ void BinEdit::OnPaint(HWND hwnd)
 
                 if (!charSelected && !isCaret && !isCaretRow) continue;
 
-                const DWORD cellFrom = __max(dc.offset, addr);
-                const DWORD cellTo   = __min(dc.offset + dc.length, lineEnd);
+                const size_t cellFrom = __max(dc.offset, addr);
+                const size_t cellTo   = __min(dc.offset + dc.length, lineEnd);
                 if (cellFrom >= cellTo) continue;
 
                 const int left  = m_textColX + static_cast<int>(cellFrom - addr) * cw - sx;
@@ -1342,7 +1397,7 @@ void BinEdit::OnPaint(HWND hwnd)
                 FillRect(memDC, &band, bandBr);
             }
 
-            for (int ci = di; ci < static_cast<int>(m_decoded.size()); ++ci)
+            for (ptrdiff_t ci = di; ci < static_cast<ptrdiff_t>(m_decoded.size()); ++ci)
             {
                 const DecodedChar& dc = m_decoded[ci];
                 if (dc.offset >= lineEnd) break;
@@ -1388,16 +1443,16 @@ void BinEdit::OnPaint(HWND hwnd)
 // マウス＆ヒットテスト
 // ===========================================================================
 
-bool BinEdit::HitTest(int x, int y, DWORD& byteOffset, PANE& pane, bool& hiNibble) const
+bool BinEdit::HitTest(int x, int y, size_t& byteOffset, PANE& pane, bool& hiNibble) const
 {
     if (y < m_headerHeight) return false;
 
     int row = (y - m_headerHeight) / m_lineHeight;
-    DWORD lineAddr = static_cast<DWORD>(m_topLine + row) * BYTES_PER_LINE;
+    size_t lineAddr = static_cast<size_t>(m_topLine + row) * BYTES_PER_LINE;
     const int cw = m_charWidth;
 
     x += m_scrollX;
-    const DWORD dataSize = size();
+    const size_t dataSize = size();
 
     if (lineAddr >= dataSize)
     {
@@ -1439,7 +1494,7 @@ bool BinEdit::HitTest(int x, int y, DWORD& byteOffset, PANE& pane, bool& hiNibbl
             }
         }
 
-        byteOffset = lineAddr + static_cast<DWORD>(byteIndex);
+        byteOffset = lineAddr + static_cast<size_t>(byteIndex);
         if (byteOffset > dataSize) byteOffset = dataSize;
         pane = PANE_HEX;
         hiNibble = (byteOffset < dataSize) ? (within == 0) : true;
@@ -1454,14 +1509,14 @@ bool BinEdit::HitTest(int x, int y, DWORD& byteOffset, PANE& pane, bool& hiNibbl
         if (byteIndex < 0) byteIndex = 0;
         if (byteIndex >= BYTES_PER_LINE) byteIndex = BYTES_PER_LINE;
 
-        byteOffset = lineAddr + static_cast<DWORD>(byteIndex);
+        byteOffset = lineAddr + static_cast<size_t>(byteIndex);
         if (byteOffset > dataSize) byteOffset = dataSize;
 
         if (byteOffset < dataSize &&
             byteOffset < m_byteToDecodedIndex.size() &&
             m_byteToDecodedIndex[byteOffset] < 0)
         {
-            DWORD p = byteOffset;
+            size_t p = byteOffset;
             while (p > 0 && (p >= m_byteToDecodedIndex.size() || m_byteToDecodedIndex[p] < 0)) --p;
             if (p < m_byteToDecodedIndex.size() && m_byteToDecodedIndex[p] >= 0)
                 byteOffset = p;
@@ -1477,25 +1532,25 @@ bool BinEdit::HitTest(int x, int y, DWORD& byteOffset, PANE& pane, bool& hiNibbl
 
 void BinEdit::OnLButtonDown(HWND hwnd, BOOL /*fDoubleClick*/, int x, int y, UINT /*keyFlags*/)
 {
-    DWORD off; PANE pane; bool hi;
+    size_t off; PANE pane; bool hi;
     if (!HitTest(x, y, off, pane, hi)) return;
 
     const bool shift = (GetKeyState(VK_SHIFT) < 0);
-    const DWORD dataSize = size();
+    const size_t dataSize = size();
     off = __min(off, dataSize);
 
     if (pane == PANE_ADDRESS)
     {
-        const DWORD lineStart = off;
-        const DWORD lineEnd = __min(lineStart + BYTES_PER_LINE, dataSize);
+        const size_t lineStart = off;
+        const size_t lineEnd = __min(lineStart + BYTES_PER_LINE, dataSize);
 
-        DWORD anchorLine = lineStart;
+        size_t anchorLine = lineStart;
         if (shift)
             anchorLine = (m_anchorOffset / BYTES_PER_LINE) * BYTES_PER_LINE;
 
         m_gutterAnchorLine = anchorLine;
 
-        const DWORD anchorLineEnd = __min(anchorLine + BYTES_PER_LINE, dataSize);
+        const size_t anchorLineEnd = __min(anchorLine + BYTES_PER_LINE, dataSize);
         if (lineStart >= anchorLine)
         {
             m_anchorOffset = anchorLine;
@@ -1615,21 +1670,21 @@ bool BinEdit::AutoScrollDragIfNeeded(int y)
 
 void BinEdit::UpdateGutterDragSelection(int x, int y)
 {
-    const DWORD dataSize = size();
+    const size_t dataSize = size();
     const bool scrolled = AutoScrollDragIfNeeded(y);
 
     int row = (y >= m_headerHeight) ? (y - m_headerHeight) / m_lineHeight : 0;
     if (row < 0) row = 0;
 
-    DWORD curLineStart = static_cast<DWORD>(m_topLine + row) * BYTES_PER_LINE;
-    const DWORD lastLineStart = (dataSize / BYTES_PER_LINE) * BYTES_PER_LINE;
+    size_t curLineStart = static_cast<size_t>(m_topLine + row) * BYTES_PER_LINE;
+    const size_t lastLineStart = (dataSize / BYTES_PER_LINE) * BYTES_PER_LINE;
     if (curLineStart > lastLineStart) curLineStart = lastLineStart;
 
-    const DWORD curLineEnd = __min(curLineStart + BYTES_PER_LINE, dataSize);
-    const DWORD anchorLineStart = m_gutterAnchorLine;
-    const DWORD anchorLineEnd = __min(anchorLineStart + BYTES_PER_LINE, dataSize);
+    const size_t curLineEnd = __min(curLineStart + BYTES_PER_LINE, dataSize);
+    const size_t anchorLineStart = m_gutterAnchorLine;
+    const size_t anchorLineEnd = __min(anchorLineStart + BYTES_PER_LINE, dataSize);
 
-    DWORD newAnchor, newCaret;
+    size_t newAnchor, newCaret;
     if (curLineStart >= anchorLineStart)
     {
         newAnchor = anchorLineStart;
@@ -1654,7 +1709,7 @@ void BinEdit::UpdateGutterDragSelection(int x, int y)
 
 void BinEdit::UpdateByteDragSelection(int x, int y)
 {
-    const DWORD dataSize = size();
+    const size_t dataSize = size();
     const bool scrolled = AutoScrollDragIfNeeded(y);
 
     int clampedY = y;
@@ -1663,7 +1718,7 @@ void BinEdit::UpdateByteDragSelection(int x, int y)
     else if (clampedY >= m_headerHeight + m_visibleLines * m_lineHeight)
         clampedY = m_headerHeight + m_visibleLines * m_lineHeight - 1;
 
-    DWORD off = 0;
+    size_t off = 0;
     bool hi = true;
     PANE pane = m_focusPane;
 
@@ -1674,7 +1729,7 @@ void BinEdit::UpdateByteDragSelection(int x, int y)
     else
     {
         int row = (clampedY - m_headerHeight) / m_lineHeight;
-        DWORD lineAddr = static_cast<DWORD>(m_topLine + row) * BYTES_PER_LINE;
+        size_t lineAddr = static_cast<size_t>(m_topLine + row) * BYTES_PER_LINE;
         if (lineAddr > dataSize) lineAddr = dataSize;
 
         const int contentX = x + m_scrollX;
@@ -1687,14 +1742,14 @@ void BinEdit::UpdateByteDragSelection(int x, int y)
             if (!HexColToByte(col, byteIndex, within)) byteIndex = BYTES_PER_LINE;
             if (byteIndex < 0) byteIndex = 0;
             if (byteIndex > BYTES_PER_LINE) byteIndex = BYTES_PER_LINE;
-            off = __min(lineAddr + static_cast<DWORD>(byteIndex), dataSize);
+            off = __min(lineAddr + static_cast<size_t>(byteIndex), dataSize);
         }
         else if (m_focusPane == PANE_TEXT && contentX >= m_textColX)
         {
             int byteIndex = (contentX - m_textColX) / cw;
             if (byteIndex < 0) byteIndex = 0;
             if (byteIndex > BYTES_PER_LINE) byteIndex = BYTES_PER_LINE;
-            off = __min(lineAddr + static_cast<DWORD>(byteIndex), dataSize);
+            off = __min(lineAddr + static_cast<size_t>(byteIndex), dataSize);
         }
         else
         {
@@ -1703,7 +1758,7 @@ void BinEdit::UpdateByteDragSelection(int x, int y)
         hi = true;
     }
 
-    DWORD newCaret = SelectionCaretFromHit(off, m_anchorOffset, dataSize);
+    size_t newCaret = SelectionCaretFromHit(off, m_anchorOffset, dataSize);
     if (newCaret != m_caretOffset || hi != m_caretHiNibble || scrolled)
     {
         m_caretOffset = newCaret;
@@ -1738,6 +1793,10 @@ void BinEdit::OnDragAutoScrollTimer()
 
 void BinEdit::UpdateScrollInfo()
 {
+    // バッファサイズが変わった可能性がある (4GB境界をまたいでアドレス桁数が変わる等) ので、
+    // スクロール情報を出す前に列レイアウトを再計算しておく。
+    RecalcLayout();
+
     int totalLines = GetTotalLines();
     const int maxTop = __max(0, totalLines - m_visibleLines);
     if (m_topLine > maxTop) m_topLine = maxTop;
@@ -1781,7 +1840,13 @@ int BinEdit::GetMaxScrollX() const
 
 int BinEdit::GetTotalLines() const
 {
-    return static_cast<int>(size() / BYTES_PER_LINE) + 1;
+    // SCROLLINFO の各フィールドは32ビット (int) までしか表現できないため、
+    // 巨大なバッファではここで頭打ちにする (スクロールバー自体の限界であり、
+    // 編集・アドレス表示・データサイズは引き続き64ビットで正しく扱われる)。
+    const unsigned long long lines = static_cast<unsigned long long>(size() / BYTES_PER_LINE) + 1;
+    return (lines > static_cast<unsigned long long>((std::numeric_limits<int>::max)()))
+        ? (std::numeric_limits<int>::max)()
+        : static_cast<int>(lines);
 }
 
 void BinEdit::OnVScroll(HWND hwnd, HWND /*hwndCtl*/, UINT code, int pos)
@@ -2128,15 +2193,15 @@ bool BinEdit::HasSelection() const
     return m_anchorOffset != m_caretOffset;
 }
 
-void BinEdit::GetSelection(DWORD& start, DWORD& end) const
+void BinEdit::GetSelection(size_t& start, size_t& end) const
 {
     start = __min(m_anchorOffset, m_caretOffset);
     end   = __max(m_anchorOffset, m_caretOffset);
 }
 
-void BinEdit::SetSelection(DWORD start, DWORD end)
+void BinEdit::SetSelection(size_t start, size_t end)
 {
-    const DWORD dataSize = size();
+    const size_t dataSize = size();
     m_anchorOffset = __min(start, dataSize);
     m_caretOffset  = __min(end, dataSize);
     m_caretHiNibble = true;
@@ -2160,7 +2225,7 @@ bool BinEdit::DeleteSelection()
 {
     if (!IsEditable() || !HasSelection()) return false;
 
-    DWORD start = 0, end = 0;
+    size_t start = 0, end = 0;
     GetSelection(start, end);
 
     DeleteRange(start, end - start);
@@ -2182,11 +2247,11 @@ UINT BinEdit::GetBinEditBytesFormat()
     return s_fmt;
 }
 
-std::wstring BinEdit::BytesToHexString(const BYTE* data, DWORD count)
+std::wstring BinEdit::BytesToHexString(const BYTE* data, size_t count)
 {
     std::wstring str;
     str.reserve(count * 3);
-    for (DWORD i = 0; i < count; ++i)
+    for (size_t i = 0; i < count; ++i)
     {
         BYTE b = data[i];
         str.push_back(HEX_DIGITS[b >> 4]);
@@ -2238,7 +2303,7 @@ bool BinEdit::ParseHexString(const WCHAR* text, data_type& out)
     return true;
 }
 
-std::wstring BinEdit::SelectionAsText(DWORD start, DWORD end) const
+std::wstring BinEdit::SelectionAsText(size_t start, size_t end) const
 {
     std::wstring result;
     if (start >= end || end > size()) return result;
@@ -2247,7 +2312,7 @@ std::wstring BinEdit::SelectionAsText(DWORD start, DWORD end) const
 
     if (m_textMode == BinEditTextMode::UTF16)
     {
-        DWORD count = (end - start) / sizeof(WCHAR);
+        size_t count = (end - start) / sizeof(WCHAR);
         if (count > 0)
             result.assign(reinterpret_cast<const WCHAR*>(pData + start), count);
     }
@@ -2267,7 +2332,7 @@ std::wstring BinEdit::SelectionAsText(DWORD start, DWORD end) const
     return result;
 }
 
-bool BinEdit::SetClipboardBytes(const BYTE* data, DWORD count, bool alsoHexText)
+bool BinEdit::SetClipboardBytes(const BYTE* data, size_t count, bool alsoHexText)
 {
     if (!OpenClipboard(m_hwnd)) return false;
     EmptyClipboard();
@@ -2321,9 +2386,9 @@ bool BinEdit::Copy()
 {
     if (!HasSelection()) return false;
 
-    DWORD start = 0, end = 0;
+    size_t start = 0, end = 0;
     GetSelection(start, end);
-    DWORD count = end - start;
+    size_t count = end - start;
 
     if (m_focusPane == PANE_TEXT)
     {
@@ -2397,8 +2462,8 @@ bool BinEdit::Paste()
 
     if (HasSelection()) DeleteSelection();
 
-    ReplaceRange(m_caretOffset, 0, pasteData.data(), static_cast<DWORD>(pasteData.size()));
-    m_caretOffset += static_cast<DWORD>(pasteData.size());
+    ReplaceRange(m_caretOffset, 0, pasteData.data(), static_cast<size_t>(pasteData.size()));
+    m_caretOffset += static_cast<size_t>(pasteData.size());
     m_anchorOffset = m_caretOffset;
     m_caretHiNibble = true;
 
@@ -2415,35 +2480,58 @@ bool BinEdit::Paste()
 // バイト配列編集・挿入/削除＆テキストエンコード
 // ===========================================================================
 
-void BinEdit::InsertByteAt(DWORD pos, BYTE value)
+void BinEdit::InsertByteAt(size_t pos, BYTE value)
 {
+    if (size() >= m_maxLen) return; // 上限に達しているので挿入しない
     pos = __min(pos, size());
     m_data_src->insert(begin() + pos, value);
     UpdateDecodeCacheAfterEdit(pos, 0, 1);
     UpdateScrollInfo();
 }
 
-void BinEdit::DeleteByteAt(DWORD pos)
+void BinEdit::DeleteByteAt(size_t pos)
 {
     if (pos >= size()) return;
+    if (size() <= m_minLen) return; // 下限を下回る削除は行わない
     m_data_src->erase(begin() + pos);
     UpdateDecodeCacheAfterEdit(pos, 1, 0);
     UpdateScrollInfo();
 }
 
-void BinEdit::DeleteRange(DWORD pos, DWORD count)
+void BinEdit::DeleteRange(size_t pos, size_t count)
 {
     if (pos >= size() || count == 0) return;
-    DWORD realCount = __min(count, size() - pos);
+    size_t realCount = __min(count, size() - pos);
+
+    // 下限を下回らないように削除量を調整する
+    if (size() - realCount < m_minLen)
+        realCount = (size() > m_minLen) ? (size() - m_minLen) : 0;
+    if (realCount == 0) return;
+
     m_data_src->erase(begin() + pos, begin() + pos + realCount);
     UpdateDecodeCacheAfterEdit(pos, realCount, 0);
     UpdateScrollInfo();
 }
 
-void BinEdit::ReplaceRange(DWORD pos, DWORD oldCount, const BYTE* newBytes, DWORD newCount)
+void BinEdit::ReplaceRange(size_t pos, size_t oldCount, const BYTE* newBytes, size_t newCount)
 {
     pos = __min(pos, size());
-    DWORD realOld = __min(oldCount, size() - pos);
+    size_t realOld = __min(oldCount, size() - pos);
+
+    // 置換後のサイズが上限を超える場合は挿入するバイト数を減らす
+    size_t resultSize = size() - realOld + newCount;
+    if (resultSize > m_maxLen)
+    {
+        size_t over = resultSize - m_maxLen;
+        newCount = (newCount > over) ? (newCount - over) : 0;
+        resultSize = size() - realOld + newCount;
+    }
+    // 置換後のサイズが下限を下回る場合は削除するバイト数を減らす
+    if (resultSize < m_minLen)
+    {
+        size_t shortage = m_minLen - resultSize;
+        realOld = (realOld > shortage) ? (realOld - shortage) : 0;
+    }
 
     m_data_src->erase(begin() + pos, begin() + pos + realOld);
     if (newBytes && newCount > 0)
@@ -2493,8 +2581,8 @@ bool BinEdit::InsertUnicodeText(const WCHAR* text, int cch)
     EncodeTextToBytes(text, cch, bytes);
     if (bytes.empty()) return false;
 
-    ReplaceRange(m_caretOffset, 0, bytes.data(), static_cast<DWORD>(bytes.size()));
-    m_caretOffset += static_cast<DWORD>(bytes.size());
+    ReplaceRange(m_caretOffset, 0, bytes.data(), static_cast<size_t>(bytes.size()));
+    m_caretOffset += static_cast<size_t>(bytes.size());
     m_anchorOffset = m_caretOffset;
     m_caretHiNibble = true;
 
@@ -2510,11 +2598,11 @@ bool BinEdit::InsertUnicodeText(const WCHAR* text, int cch)
 // キーボード移動 & 編集操作 (OnKey, OnChar)
 // ===========================================================================
 
-void BinEdit::MoveCaretBy(long deltaBytes)
+void BinEdit::MoveCaretBy(ptrdiff_t deltaBytes)
 {
-    long newOff = static_cast<long>(m_caretOffset) + deltaBytes;
-    newOff = __max(0, __min(newOff, static_cast<long>(size())));
-    m_caretOffset = static_cast<DWORD>(newOff);
+    ptrdiff_t newOff = static_cast<ptrdiff_t>(m_caretOffset) + deltaBytes;
+    newOff = __max(static_cast<ptrdiff_t>(0), __min(newOff, static_cast<ptrdiff_t>(size())));
+    m_caretOffset = static_cast<size_t>(newOff);
     m_caretHiNibble = true;
 }
 
@@ -2532,7 +2620,7 @@ void BinEdit::MoveCaretEnd(bool wholeBuffer)
     }
     else
     {
-        DWORD lineStart = m_caretOffset - m_caretOffset % BYTES_PER_LINE;
+        size_t lineStart = m_caretOffset - m_caretOffset % BYTES_PER_LINE;
         m_caretOffset = __min(lineStart + BYTES_PER_LINE, size());
     }
     m_caretHiNibble = true;
@@ -2554,7 +2642,7 @@ void BinEdit::OnKey(HWND hwnd, UINT vk, BOOL fDown, int /*cRepeat*/, UINT /*flag
         }
         else if (HasSelection())
         {
-            DWORD start, end;
+            size_t start, end;
             GetSelection(start, end);
             m_caretOffset = start;
             m_caretHiNibble = true;
@@ -2585,7 +2673,7 @@ void BinEdit::OnKey(HWND hwnd, UINT vk, BOOL fDown, int /*cRepeat*/, UINT /*flag
         }
         else if (HasSelection())
         {
-            DWORD start, end;
+            size_t start, end;
             GetSelection(start, end);
             m_caretOffset = end;
             m_caretHiNibble = true;
@@ -2604,7 +2692,7 @@ void BinEdit::OnKey(HWND hwnd, UINT vk, BOOL fDown, int /*cRepeat*/, UINT /*flag
         }
         else
         {
-            MoveCaretBy(static_cast<long>(DecodedLengthAt(m_caretOffset)));
+            MoveCaretBy(static_cast<ptrdiff_t>(DecodedLengthAt(m_caretOffset)));
         }
         moved = true;
         break;
@@ -2665,7 +2753,7 @@ void BinEdit::OnKey(HWND hwnd, UINT vk, BOOL fDown, int /*cRepeat*/, UINT /*flag
         }
         else if (IsEditable() && m_caretOffset < size())
         {
-            DWORD len = (m_focusPane == PANE_TEXT) ? DecodedLengthAt(m_caretOffset) : 1;
+            size_t len = (m_focusPane == PANE_TEXT) ? DecodedLengthAt(m_caretOffset) : 1;
             DeleteRange(m_caretOffset, len);
             m_caretHiNibble = true;
             m_anchorOffset = m_caretOffset;
@@ -2723,7 +2811,7 @@ void BinEdit::OnChar(HWND hwnd, TCHAR ch, int /*cRepeat*/)
         int v = HexValue(ch);
         if (v < 0) return;
 
-        const DWORD editOffset = m_caretOffset;
+        const size_t editOffset = m_caretOffset;
         if (m_caretOffset >= size() || (m_insertMode && m_caretHiNibble))
         {
             InsertByteAt(m_caretOffset, 0);

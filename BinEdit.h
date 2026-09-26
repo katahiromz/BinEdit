@@ -12,6 +12,8 @@
 #include <imm.h>
 #include <vector>
 #include <string>
+#include <cstdint>
+#include <limits>
 
 // テキスト列のデコードモード
 enum class BinEditTextMode
@@ -65,6 +67,15 @@ public:
 
     std::wstring GetDumpText() const;
 
+    // ---- サイズ変更 & サイズ制限 ---------------------------------------
+    // バッファを cb バイトに変更する (拡張時はゼロ埋め、SetLimit() の範囲にクランプされる)
+    void resize(size_t cb);
+    // バッファサイズの下限・下限を設定する (min_len > max_len の場合は入れ替える)。
+    // 現在のサイズが範囲外なら直ちに resize() で合わせる。
+    void SetLimit(size_t min_len, size_t max_len);
+    size_t GetMinLimit() const { return m_minLen; }
+    size_t GetMaxLimit() const { return m_maxLen; }
+
     // ---- デコードモード設定 ------------------------------------------
     void SetTextMode(BinEditTextMode mode);
     BinEditTextMode GetTextMode() const { return m_textMode; }
@@ -77,8 +88,8 @@ public:
     bool GetReadOnly() const { return m_readOnly; }
 
     HWND GetHwnd() const { return m_hwnd; }
-    DWORD GetCaretOffset() const { return m_caretOffset; }
-    void SetCaretOffset(DWORD offset);
+    size_t GetCaretOffset() const { return m_caretOffset; }
+    void SetCaretOffset(size_t offset);
 
     // ---- 挿入/上書きモード -------------------------------------------
     bool GetInsertMode() const { return m_insertMode; }
@@ -86,8 +97,8 @@ public:
 
     // ---- 選択範囲操作 ------------------------------------------------
     bool HasSelection() const;
-    void GetSelection(DWORD& start, DWORD& end) const;
-    void SetSelection(DWORD start, DWORD end);
+    void GetSelection(size_t& start, size_t& end) const;
+    void SetSelection(size_t start, size_t end);
     void ClearSelection();
 
     // ---- クリップボード操作 ------------------------------------------
@@ -159,6 +170,7 @@ protected:
     void InvalidateAll();
     void NotifyChanged();
     void RecalcLayout();
+    int AddressDigits() const; // アドレス列の桁数 (通常8桁、4GBを超えたら16桁)
     void CreateEditFont();
     void MeasureFontMetrics();
     void UpdateCaretShape();
@@ -170,11 +182,11 @@ protected:
     // pos..pos+oldLen (旧バッファ) が pos..pos+newLen (新バッファ) に置き換わった直後に呼ぶ。
     // 編集点付近だけを再デコードし、可能な限り RebuildDecodeCache() のフルスキャンを避ける。
     // 安全に再同期できない場合は自動的に RebuildDecodeCache() にフォールバックする。
-    void UpdateDecodeCacheAfterEdit(DWORD editPos, DWORD oldLen, DWORD newLen);
-    bool HitTest(int x, int y, DWORD& byteOffset, PANE& pane, bool& hiNibble) const;
+    void UpdateDecodeCacheAfterEdit(size_t editPos, size_t oldLen, size_t newLen);
+    bool HitTest(int x, int y, size_t& byteOffset, PANE& pane, bool& hiNibble) const;
 
     // キャレット移動・編集
-    void MoveCaretBy(long deltaBytes);
+    void MoveCaretBy(ptrdiff_t deltaBytes);
     void MoveCaretHome(bool wholeBuffer);
     void MoveCaretEnd(bool wholeBuffer);
     void ApplySelectionAfterMove(bool extend);
@@ -182,31 +194,31 @@ protected:
     bool IsEditable() const;
     void SelectAll();
 
-    void InsertByteAt(DWORD pos, BYTE value);
-    void DeleteByteAt(DWORD pos);
-    void DeleteRange(DWORD pos, DWORD count);
-    void ReplaceRange(DWORD pos, DWORD oldCount, const BYTE* newBytes, DWORD newCount);
+    void InsertByteAt(size_t pos, BYTE value);
+    void DeleteByteAt(size_t pos);
+    void DeleteRange(size_t pos, size_t count);
+    void ReplaceRange(size_t pos, size_t oldCount, const BYTE* newBytes, size_t newCount);
 
     void EncodeCharToBytes(WCHAR ch, data_type& outBytes) const;
-    DWORD DecodedLengthAt(DWORD pos) const;
+    size_t DecodedLengthAt(size_t pos) const;
 
     static UINT GetBinEditBytesFormat();
-    static std::wstring BytesToHexString(const BYTE* data, DWORD count);
+    static std::wstring BytesToHexString(const BYTE* data, size_t count);
     static bool ParseHexString(const WCHAR* text, data_type& out);
-    std::wstring SelectionAsText(DWORD start, DWORD end) const;
+    std::wstring SelectionAsText(size_t start, size_t end) const;
     void EncodeTextToBytes(const WCHAR* text, int cch, data_type& out) const;
 
-    bool SetClipboardBytes(const BYTE* data, DWORD count, bool alsoHexText);
+    bool SetClipboardBytes(const BYTE* data, size_t count, bool alsoHexText);
     bool SetClipboardUnicodeText(const std::wstring& text);
 
-    DWORD size() const { return static_cast<DWORD>(m_data_src->size()); }
+    size_t size() const { return static_cast<size_t>(m_data_src->size()); }
     data_type::iterator begin() { return m_data_src->begin(); }
     data_type::iterator end() { return m_data_src->end(); }
 
     struct DecodedChar
     {
-        DWORD offset;
-        DWORD length;       // 消費されたソースバイト数
+        size_t offset;
+        size_t length;       // 消費されたソースバイト数
         std::wstring glyph; // 描画用のUTF-16文字
         bool printable;
     };
@@ -233,14 +245,14 @@ protected:
     int m_scrollX = 0;
     int m_contentWidth = 0;
 
-    DWORD m_caretOffset = 0;
-    DWORD m_anchorOffset = 0;
+    size_t m_caretOffset = 0;
+    size_t m_anchorOffset = 0;
     bool m_caretHiNibble = true;
     PANE m_focusPane = PANE_HEX;
     bool m_hasFocus = false;
     bool m_trackingMouse = false;
     bool m_gutterDrag = false;
-    DWORD m_gutterAnchorLine = 0;
+    size_t m_gutterAnchorLine = 0;
     bool m_insertMode = true;
     bool m_suppressImeChar = false;
 
@@ -252,5 +264,8 @@ protected:
     int m_clientHeight = 0;
 
     std::vector<DecodedChar> m_decoded;
-    std::vector<int> m_byteToDecodedIndex;
+    std::vector<ptrdiff_t> m_byteToDecodedIndex;
+
+    size_t m_minLen = 0;                                          // resize()/編集で下回れない最小サイズ
+    size_t m_maxLen = (std::numeric_limits<size_t>::max)();        // resize()/編集で超えられない最大サイズ
 };

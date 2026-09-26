@@ -60,8 +60,12 @@ bool HexColToByte(int col, int& byteIndex, int& withinCell)
 UINT GetWindowDpi(HWND hwnd)
 {
     using GetDpiForWindow_t = UINT (WINAPI *)(HWND);
-    static auto s_pGetDpiForWindow = reinterpret_cast<GetDpiForWindow_t>(
-        GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+    static GetDpiForWindow_t s_pGetDpiForWindow = nullptr;
+    if (!s_pGetDpiForWindow)
+    {
+        FARPROC fn = GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
+        memcpy(&s_pGetDpiForWindow, &fn, sizeof(fn));
+    }
 
     if (s_pGetDpiForWindow)
     {
@@ -667,8 +671,12 @@ HFONT BinEdit::OnGetFont(HWND /*hwnd*/)
 
 int BinEdit::AddressDigits() const
 {
+#ifdef _WIN64
     // 通常は32ビット幅 (8桁) で表示し、4GBを超えるバッファのみ64ビット幅 (16桁) にする
     return (size() > 0xFFFFFFFFull) ? 16 : 8;
+#else
+    return 8;
+#endif
 }
 
 void BinEdit::RecalcLayout()
@@ -855,6 +863,9 @@ void BinEdit::ShowContextMenu(int screenX, int screenY)
 
 void BinEdit::NotifyChanged()
 {
+    if (m_changed_flag_lock)
+        return;
+
     HWND hParent = GetParent(m_hwnd);
     if (hParent)
     {
@@ -869,6 +880,7 @@ void BinEdit::NotifyChanged()
 
 void BinEdit::SetDataSrc(data_type* data_src)
 {
+    ++m_changed_flag_lock;
     m_data_src = (data_src ? data_src : &m_data);
     m_anchorOffset = 0;
     m_caretOffset = 0;
@@ -878,6 +890,7 @@ void BinEdit::SetDataSrc(data_type* data_src)
     EnsureCaretVisible();
     InvalidateAll();
     RebuildDecodeCache();
+    --m_changed_flag_lock;
 }
 
 void BinEdit::SetData(data_type data)
@@ -923,6 +936,7 @@ void BinEdit::resize(size_t cb)
 
 void BinEdit::SetLimit(size_t min_len, size_t max_len)
 {
+    m_changed_flag_lock++;
     if (min_len > max_len)
         std::swap(min_len, max_len); // 安全側に倒す (逆転していたら入れ替える)
 
@@ -934,6 +948,7 @@ void BinEdit::SetLimit(size_t min_len, size_t max_len)
         resize(m_minLen);
     else if (cur > m_maxLen)
         resize(m_maxLen);
+    m_changed_flag_lock--;
 }
 
 void BinEdit::SetTextMode(BinEditTextMode mode)
@@ -1927,6 +1942,16 @@ void BinEdit::OnHScroll(HWND hwnd, HWND /*hwndCtl*/, UINT code, int pos)
 
 void BinEdit::OnMouseWheel(HWND hwnd, int xPos, int yPos, int zDelta, UINT fwKeys)
 {
+	if (GetKeyState(VK_CONTROL) < 0)
+	{
+		UINT id = GetDlgCtrlID(hwnd);
+		if (zDelta < 0)
+			PostMessage(GetParent(hwnd), WM_COMMAND, MAKEWPARAM(id, BEN_ZOOMOUT), (LPARAM)hwnd);
+		else
+			PostMessage(GetParent(hwnd), WM_COMMAND, MAKEWPARAM(id, BEN_ZOOMIN), (LPARAM)hwnd);
+		return;
+	}
+
     if (fwKeys & MK_SHIFT)
     {
         UINT wheelChars = 3;

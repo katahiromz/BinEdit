@@ -26,6 +26,8 @@ enum class BinEditTextMode
 
 // 親ウィンドウへ送信される通知コード (WM_COMMAND)
 #define BEN_CHANGE 0x0001
+#define BEN_ZOOMOUT 0x0002
+#define BEN_ZOOMIN 0x0003
 
 // BinEdit 固有のスタイルビット
 #define BES_NOHEADER 0x00000001 // アドレス・16進ヘッダーの非表示
@@ -255,6 +257,7 @@ protected:
     size_t m_gutterAnchorLine = 0;
     bool m_insertMode = true;
     bool m_suppressImeChar = false;
+    int m_changed_flag_lock = 0; // 変更フラグロック
 
     // レイアウト位置情報
     int m_addrColX = 0;
